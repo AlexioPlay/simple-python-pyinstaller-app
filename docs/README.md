@@ -1,106 +1,27 @@
-// Terminal
-docker network create jenkins
+Autores:
+Alejandro Pedro Alonso-Basurto Díaz
+Jonás Núñez Díaz
 
-// Terminal
-docker run --name jenkins-docker --detach ^  --privileged --network jenkins --network-alias docker ^
-  --env DOCKER_TLS_CERTDIR=/certs ^  --volume jenkins-docker-certs:/certs/client ^
-  --volume jenkins-data:/var/jenkins_home ^  --publish 3000:3000 --publish 5000:5000 --publish 2376:2376 ^  docker:dind
+En primer lugar, realizamos un fork del repositorio de la práctica mediante el comando "fork https://github.com/jenkins-docs/simple-python-pyinstaller-app", sobre el cual vamos a trabajar. Tenemos un fichero Dockerfile, que nos servirá para crear la imagen de docker modificada de jenkins con la extensión "blueocean".
+Ejecutamos el comando docker en la terminal: docker build -t myjenkins-blueocean:2.426.2-1 .
+Con este comando creamos la imagen que vamos a usar en Terraform.
 
-// Dockerfile
-FROM jenkins/jenkins:2.426.2-jdk17
-USER root
-RUN apt-get update && apt-get install -y lsb-release
-RUN curl -fsSLo /usr/share/keyrings/docker-archive-keyring.asc \
-  https://download.docker.com/linux/debian/gpg
-RUN echo "deb [arch=$(dpkg --print-architecture) \
-  signed-by=/usr/share/keyrings/docker-archive-keyring.asc] \
-  https://download.docker.com/linux/debian \
-  $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
-RUN apt-get update && apt-get install -y docker-ce-cli
-USER jenkins
-RUN jenkins-plugin-cli --plugins "blueocean:1.27.9 docker-workflow:572.v950f58993843"
+Para continuar, tenemos en nuestra posesión dos ficheros más: "jenkins-docker+jenkins-blueocean.tf" y "variables.tf".
+El primero de los ficheros es el fichero principal de Terraform, el cual usamos para desplegar el contenedor de docker-dind (jenkins-docker) y el de jenkins con blueocean(jenkins-blueocean). El contenedor jenkins-docker nos sirve como motor de docker para ofrecérselo al contenedo de jenkins, que es el contenedor que va a realizar el despliegue del pipeline.
 
-// Terminal
-docker build -t myjenkins-blueocean:2.426.2-1 .
+A continuación, vamos a explicar el fichero "jenkins-docker+jenkins-blueocean.tf":
+Indicamos que el proveedor de la configuración es Docker. con "provider "docker" {}".
+Los dos "resource" nos permiten declarar y otorgar un nombre a las imágenes de docker "docker:dind" y la imagen recientemente creada de jenkins con blueocean, myjenkins-blueocean:2.426.2-1".
+Después, tenemos los dos recursos "resource" para crear el contenedor jenkins-docker y el contenedor jenkins-blueocean. El parámetro image sirve para indicar la imagen que va a usar este, name para indicar el nombre que le daremos, ports nos permite el mapeo de los puertos de nuestra máquina hacia el contenedor.
+Las variables de entorno se proporcionan al contenedor a través de la sección "env". Todas estas variables se encuentrar, para mayor modularidad del código, en el fichero variables.tf, definidas con el formato tipo, valor.
+Luego, indicamos los volúmenes que vayamos a usar para permitir la persistencia una vez los contenedores sean eliminados, indicando el nombre del volumen (los cuales están declarados debajo, fuera del "resource") y el path del contenedor en el que quieres montar el volumen.
+Por último, tenemos el bloque networks_advanced, para indicar la red (jenkins), cuya red está declarada debajo, a la que pertenecen ambos contenedores para que puedan comunicarse.
 
-// Terminal
-docker run --name jenkins-blueocean --detach ^
-  --network jenkins --env DOCKER_HOST=tcp://docker:2376 ^
-  --env DOCKER_CERT_PATH=/certs/client --env DOCKER_TLS_VERIFY=1 ^
-  --volume jenkins-data:/var/jenkins_home ^
-  --volume jenkins-docker-certs:/certs/client:ro ^
-  --volume "%HOMEDRIVE%%HOMEPATH%":/home ^
-  --restart=on-failure ^
-  --env JAVA_OPTS="-Dhudson.plugins.git.GitSCM.ALLOW_LOCAL_CHECKOUT=true" ^
-  --publish 8080:8080 --publish 50000:50000 myjenkins-blueocean:2.426.2-1
+Desde terminal, en el directorio docs, ejecutamos el comando: terraform init
+A continuación, ejecutamos: terraform apply, para que desplieguen los contenedores.
+Una vez ya están desplegados, accedemos a "localhost:8080" desde el navegador web. Esto nos llega al menú de instalación de jenkins. Introducimos nombre de usuario, contraseña y correo, y luego indicamos la url de jenkins. Tenemos que buscar la contraseña inicial en el directorio var/jenkins_home/secrets/initialAdminPassword, mediante los comandos de terminal: "docker exec -it jenkins-blueocean bash" y "cat /var/jenkins_home/secrets/initialAdminPassword".
 
-// Buscar la contraseña en /var/jenkins_home/secrets/initialAdminPassword
-// Terminal
-docker exec -it jenkins-blueocean bash
-cat /var/jenkins_home/secrets/initialAdminPassword
+Para crear un pipeline:
+Hacemos click en "Nueva Tarea", introduciomos nombre para el ítem, seleccionamos "pipeline". Damos una descripción (opcional), luego, en la sección Pipeline, en definition seleccionamos "from SCM" y seleccionamos Git, e indicamos la URL del repositorio (en nuestro caso https://github.com/AlexioPlay/simple-python-pyinstaller-app). En branch specifier, indicamos que es la rama main la que contiene el pipeline Jenkinsfile (*/main), y que el script path es Jenkinsfile, ya que está en la raíz del repositorio.
 
-// fork https://github.com/jenkins-docs/simple-python-pyinstaller-app
-// clonar repositorio personal
-
-// Crear pipeline llamada simple-python-pyinstaller-app desde jenkins
-
-// git add .
-// git commit -m "Add initial Jenkinsfile"
-// git push
-
-/añadir otra stage al jenkins file
-
-//jenkinsfile final
-pipeline {
-    agent none
-    options {
-        skipStagesAfterUnstable()
-    }
-    stages {
-        stage('Build') {
-            agent {
-                docker {
-                    image 'python:3.12.1-alpine3.19'
-                }
-            }
-            steps {
-                sh 'python -m py_compile sources/add2vals.py sources/calc.py'
-                stash(name: 'compiled-results', includes: 'sources/*.py*')
-            }
-        }
-        stage('Test') {
-            agent {
-                docker {
-                    image 'qnib/pytest'
-                }
-            }
-            steps {
-                sh 'py.test --junit-xml test-reports/results.xml sources/test_calc.py'
-            }
-            post {
-                always {
-                    junit 'test-reports/results.xml'
-                }
-            }
-        }
-        stage('Deliver') { 
-            agent any
-            environment { 
-                VOLUME = '$(pwd)/sources:/src'
-                IMAGE = 'cdrx/pyinstaller-linux:python2'
-            }
-            steps {
-                dir(path: env.BUILD_ID) { 
-                    unstash(name: 'compiled-results') 
-                    sh "docker run --rm -v ${VOLUME} ${IMAGE} 'pyinstaller -F add2vals.py'" 
-                }
-            }
-            post {
-                success {
-                    archiveArtifacts "${env.BUILD_ID}/sources/dist/add2vals" 
-                    sh "docker run --rm -v ${VOLUME} ${IMAGE} 'rm -rf build dist'"
-                }
-            }
-        }
-    }
-}
+Para ejecutar el pipeline, abrimos el menú de blueocean seleccionando en el panel de la izquierda. Hacemos click en iniciar para inciar el proceso de despliegue del pipeline de jenkins. Vemos como se completan las etapas de Build, Test y Deliver, y listo.
