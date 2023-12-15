@@ -47,7 +47,7 @@ resource "docker_container" "jenkins-docker" {
     container_path = "/var/jenkins_home"
   }
   networks_advanced {
-    name = docker_network.jenkins_network.name
+    name = docker_network.jenkins.name
   }
 }
 
@@ -84,7 +84,7 @@ resource "docker_container" "jenkins-blueocean" {
     host_path      = "/User/alexa"
   }
   networks_advanced {
-    name = docker_network.jenkins_network.name
+    name = docker_network.jenkins.name
   }
 }
 
@@ -98,6 +98,6 @@ resource "docker_volume" "homepath" {
   name = "homepath"
 }
 
-resource "docker_network" "jenkins_network" {
-  name = "jenkins_network"
+resource "docker_network" "jenkins" {
+  name = "jenkins"
 }
