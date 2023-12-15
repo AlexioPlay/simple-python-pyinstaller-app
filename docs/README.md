@@ -42,7 +42,7 @@ cat /var/jenkins_home/secrets/initialAdminPassword
 // fork https://github.com/jenkins-docs/simple-python-pyinstaller-app
 // clonar repositorio personal
 
-// Crear pipeline desde jenkins
+// Crear pipeline llamada simple-python-pyinstaller-app desde jenkins
 
 // git add .
 // git commit -m "Add initial Jenkinsfile"
