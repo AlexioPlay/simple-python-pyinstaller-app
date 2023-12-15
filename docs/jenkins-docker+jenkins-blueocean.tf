@@ -48,6 +48,7 @@ resource "docker_container" "jenkins-docker" {
   }
   networks_advanced {
     name = docker_network.jenkins.name
+    aliases = ["docker"]
   }
 }
 

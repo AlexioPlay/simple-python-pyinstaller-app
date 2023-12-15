@@ -6,8 +6,6 @@ variable "DOCKER_TLS_CERTDIR" {
 variable "DOCKER_HOST" {
   type        = string
   default     = "tcp://docker:2376"
-  # default     = "jenkins-docker:2376"
-  # default     = "unix:///var/run/docker.sock"
 }
 
 variable "DOCKER_CERT_PATH" {
